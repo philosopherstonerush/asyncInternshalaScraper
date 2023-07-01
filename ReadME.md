@@ -16,3 +16,4 @@ Like this
 `C:\\path\to\where\you\want\the\csv\file\to\be\created`
 5) Your internship offers are displayed in the browser with the nicegui framework.
 6) Select the internships you have applied to and then select export CSV to store them. Make sure that csv file already exists with column headers ["id","internship_name","company", "stipend", "posted", "portal", "applied_date", "call_back"]
+7) Execute main.py file as you would any other python file.
