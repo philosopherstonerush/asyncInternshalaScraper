@@ -47,6 +47,7 @@ async def scrape_em_internshala(url, limit):
                     soup = BeautifulSoup(body, 'html.parser')
                     all_meta = soup.find_all(class_="internship_meta")
                     result = []
+                    # Scrapping specific
                     if all_meta:
                         for elem in all_meta:
                             x = {}
@@ -84,7 +85,7 @@ async def scrape_em_internshala(url, limit):
                     return [{"id": "response denied"}]
 
 def writeToCSV(rows):
-    with open("C:/Users/suvarna narayanan/Desktop/intern-rip/analytics/details.csv", mode='a', encoding="utf-8") as final_file:
+    with open(constants.FILE, mode='a', encoding="utf-8") as final_file:
         field_names_final=["id", "internship_name", "company", "stipend", "posted", "portal", "applied_date", "call_back"]
         writer = csv.DictWriter(final_file, fieldnames=field_names_final)
         date = datetime.date.today()
@@ -134,6 +135,7 @@ def displayGUI():
     ui.label("Internships scraped: " + str(length))
     # selection allows you to have an instance variable called selected that gives you the dicts that are selected by the user
     table = ui.table(rows=rows, columns=columns, title="Internships", pagination=10, selection= "multiple", row_key= "id")
+    # Most of these callback functions are anonymous lambda functions
     ui.button("Export CSV", on_click=lambda :writeToCSV(table.selected))
     ui.run()
 
