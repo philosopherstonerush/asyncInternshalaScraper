@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 from nicegui import ui
 import constants
+import re
 
 # Internship offers that I have already scraped
 df = pd.read_csv(constants.FILE)
@@ -35,6 +36,9 @@ async def main():
         for elem in res:
             if elem not in internships_offers:
                 internships_offers.append(elem)
+    
+    # Sorting
+    internships_offers.sort(key=natural_keys,reverse=True)
 
 
 # Pass in the url and  semaphore limit
@@ -134,10 +138,22 @@ def displayGUI():
     length = len(internships_offers)
     ui.label("Internships scraped: " + str(length))
     # selection allows you to have an instance variable called selected that gives you the dicts that are selected by the user
-    table = ui.table(rows=rows, columns=columns, title="Internships", pagination=10, selection= "multiple", row_key= "id")
+    table = ui.table(rows=rows, columns=columns, title="Internships", pagination=10, selection= "multiple", row_key= "id").classes("w-full")
     # Most of these callback functions are anonymous lambda functions
     ui.button("Export CSV", on_click=lambda :writeToCSV(table.selected))
     ui.run()
+
+# Sorting implementation
+def atoi(stipend):
+    return int(stipend) if stipend.isdigit() else stipend
+
+def natural_keys(text):
+    '''
+    internships.sort(key=natural_keys) sorts in human order
+    http://nedbatchelder.com/blog/200712/human_sorting.html
+    (See Toothy's implementation in the comments)
+    '''
+    return [ atoi(c) for c in re.split(r'(\d+)', text["stipend"]) ]
 
 # async main function is run until all threads are completed 
 loop = asyncio.get_event_loop()
