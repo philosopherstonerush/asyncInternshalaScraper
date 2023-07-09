@@ -4,18 +4,28 @@ import aiohttp
 import asyncio
 from bs4 import BeautifulSoup
 import pandas as pd
-from nicegui import ui
+from nicegui import ui, app
 import constants
 import re
 
+# Error count
+metaDataNotAvailable = 0
+responseDenied = 0
+
 # Internship offers that I have already scraped
 df = pd.read_csv(constants.FILE)
+df_na = pd.read_csv(constants.FILE_NOT_APPLIED)
 ids_already_scraped = df["id"].tolist()
+ids_already_scraped.extend(df_na["id"].to_list())
 
 # List of internship offers currently scraped
 internships_offers = []
 
 async def main():
+    # Cannot update global scope variables inside a function
+    global metaDataNotAvailable 
+    global responseDenied
+
     limit = asyncio.Semaphore(constants.LIMIT) # Limits the number of threads created
     
     tasks = [] # list to store the task objects
@@ -32,10 +42,16 @@ async def main():
     
     for elem in tasks:
         # separate the result of the task object from other info
-        res = elem.result() 
+        res = elem.result()
         for elem in res:
-            if elem not in internships_offers:
-                internships_offers.append(elem)
+            if len(elem) == 6: # Removing error, I should replace it with logs
+                if elem not in internships_offers:
+                    internships_offers.append(elem)
+            else:
+                if elem["id"] == "MetaData":
+                    metaDataNotAvailable = metaDataNotAvailable + 1
+                else:
+                    responseDenied = responseDenied + 1
     
     # Sorting
     internships_offers.sort(key=natural_keys,reverse=True)
@@ -50,7 +66,7 @@ async def scrape_em_internshala(url, limit):
                     body = await resp.text()
                     soup = BeautifulSoup(body, 'html.parser')
                     all_meta = soup.find_all(class_="internship_meta")
-                    result = []
+                    result = [] # [{"position": etc}]
                     # Scrapping specific
                     if all_meta:
                         for elem in all_meta:
@@ -69,7 +85,7 @@ async def scrape_em_internshala(url, limit):
                             if sti:
                                 x["stipend"] = sti.text.strip()
                             else:
-                                x["stipend"] = "unknown"
+                                x["stipend"] = "0"
                             day = elem.find(class_="status status-small status-success")
                             if day:
                                 x["posted"] = day.text.strip()
@@ -80,16 +96,16 @@ async def scrape_em_internshala(url, limit):
                                 continue
                             x["id"] = id
                             link = elem.find(class_="view_detail_button")
-                            x["link"] = "www.internshala" + link["href"]
+                            x["link"] = "www.internshala.com" + link["href"]
                             result.append(x)
                     else:
-                        result.append({"id": "meta not available"})
+                        result.append({"id": "MetaData"}) # meta data wasnt available 
                     return result
                 else:
-                    return [{"id": "response denied"}]
+                    return [{"id": "response"}] # response got denied
 
-def writeToCSV(rows):
-    with open(constants.FILE, mode='a', encoding="utf-8") as final_file:
+def writeToCSV(rows, file): # File -> Constants.FILE or Constants.FILE_NOT_APPLIED
+    with open(file, mode='a', encoding="utf-8") as final_file:
         field_names_final=["id", "internship_name", "company", "stipend", "posted", "portal", "applied_date", "call_back"]
         writer = csv.DictWriter(final_file, fieldnames=field_names_final)
         date = datetime.date.today()
@@ -137,11 +153,15 @@ def displayGUI():
     rows = internships_offers
     length = len(internships_offers)
     ui.label("Internships scraped: " + str(length))
+    ui.label("MetaData wasnt available for : " + str(metaDataNotAvailable))
+    ui.label("Response denied for: " + str(responseDenied))
     # selection allows you to have an instance variable called selected that gives you the dicts that are selected by the user
     table = ui.table(rows=rows, columns=columns, title="Internships", pagination=10, selection= "multiple", row_key= "id").classes("w-full")
     # Most of these callback functions are anonymous lambda functions
-    ui.button("Export CSV", on_click=lambda :writeToCSV(table.selected))
-    ui.run()
+    ui.button("Export CSV", on_click=lambda :writeToCSV(table.selected, constants.FILE))
+    ui.button("EXCLUDE", on_click=lambda: writeToCSV(table.selected, constants.FILE_NOT_APPLIED)).classes("danger")
+    ui.button("shutdown", on_click=app.shutdown)
+    ui.run(reload=False)
 
 # Sorting implementation
 def atoi(stipend):
@@ -153,7 +173,10 @@ def natural_keys(text):
     http://nedbatchelder.com/blog/200712/human_sorting.html
     (See Toothy's implementation in the comments)
     '''
-    return [ atoi(c) for c in re.split(r'(\d+)', text["stipend"]) ]
+    try:
+        return [ atoi(c) for c in re.split(r'(\d+)', text["stipend"]) ]
+    except KeyError:
+        print(text)
 
 # async main function is run until all threads are completed 
 loop = asyncio.get_event_loop()
